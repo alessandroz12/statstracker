@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { supabase } from '@/lib/supabase'
+import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
 const SEASON = 2024
@@ -20,25 +21,6 @@ type StandingTeamItem = {
       against: number
     }
   }
-}
-
-function getDisplayName(apiName: string) {
-  const names: Record<string, string> = {
-    'Austria Vienna': 'Austria Wien',
-    'Rapid Vienna': 'Rapid Wien',
-    'Red Bull Salzburg': 'Red Bull Salzburg',
-    'Sturm Graz': 'Sturm Graz',
-    LASK: 'LASK',
-    Hartberg: 'Hartberg',
-    'SCR Altach': 'Altach',
-    'Wolfsberger AC': 'WAC',
-    'WSG Wattens': 'WSG Tirol',
-    'FC BW Linz': 'BW Linz',
-    'Grazer AK': 'Grazer AK',
-    Ried: 'Ried',
-  }
-
-  return names[apiName] ?? apiName
 }
 
 function mapStandingTeam(

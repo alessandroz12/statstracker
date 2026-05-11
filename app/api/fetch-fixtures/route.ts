@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { supabase } from '@/lib/supabase'
+import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
 const SEASON = 2024
@@ -54,8 +55,8 @@ export async function GET() {
     date: item.fixture.date,
     home_team_id: item.teams.home.id,
     away_team_id: item.teams.away.id,
-    home_team_name: item.teams.home.name,
-    away_team_name: item.teams.away.name,
+    home_team_name: getDisplayName(item.teams.home.name),
+    away_team_name: getDisplayName(item.teams.away.name),
     home_goals: item.goals.home,
     away_goals: item.goals.away,
     status: item.fixture.status.short,

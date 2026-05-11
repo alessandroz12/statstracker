@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
+import { getDisplayName } from '@/lib/teamNames'
 
 const AUSTRIA_ID = 601
 
@@ -44,10 +45,16 @@ function getResult(match: Match) {
   return 'U'
 }
 
-function getOpponent(match: Match) {
-  return match.home_team_id === AUSTRIA_ID
-    ? match.away_team_name
-    : match.home_team_name
+function getOpponent(match: Match, teams: Team[]) {
+  const opponentId =
+    match.home_team_id === AUSTRIA_ID ? match.away_team_id : match.home_team_id
+  const fallbackName =
+    match.home_team_id === AUSTRIA_ID
+      ? match.away_team_name
+      : match.home_team_name
+  const opponent = teams.find((team) => team.id === opponentId)
+
+  return opponent ? getTeamName(opponent) : getDisplayName(fallbackName)
 }
 
 function getScore(match: Match) {
@@ -306,7 +313,7 @@ export default function DashboardView() {
                     <div>
                       <p className="font-medium">Austria Wien</p>
                       <p className="text-sm text-slate-400">
-                        vs. {getOpponent(match)}
+                        vs. {getOpponent(match, teams)}
                       </p>
                     </div>
 
