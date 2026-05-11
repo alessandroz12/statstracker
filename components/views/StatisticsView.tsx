@@ -5,7 +5,8 @@ import { supabase } from '@/lib/supabase'
 
 const AUSTRIA_ID = 601
 
-type TeamGroup = 'top' | 'bottom'
+type SummaryKey = 'top' | 'bottom' | 'possessionStrong' | 'possessionWeak'
+type PossessionGroup = 'possessionStrong' | 'possessionWeak'
 
 type Team = {
   id: number
@@ -35,7 +36,7 @@ type MatchTeamStats = {
 }
 
 type GroupSummary = {
-  key: TeamGroup
+  key: SummaryKey
   title: string
   games: number
   wins: number
@@ -78,6 +79,30 @@ const emptySummaries: GroupSummary[] = [
     shotsOnGoal: null,
     corners: null,
   },
+  {
+    key: 'possessionStrong',
+    title: 'Gegen ballbesitzstarke Teams',
+    games: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    ballPossession: null,
+    totalShots: null,
+    shotsOnGoal: null,
+    corners: null,
+  },
+  {
+    key: 'possessionWeak',
+    title: 'Gegen ballbesitzschwache Teams',
+    games: 0,
+    wins: 0,
+    draws: 0,
+    losses: 0,
+    ballPossession: null,
+    totalShots: null,
+    shotsOnGoal: null,
+    corners: null,
+  },
 ]
 
 function getOpponentId(match: Match) {
@@ -96,11 +121,46 @@ function getResult(match: Match) {
   return 'draw'
 }
 
-function getOpponentGroup(team: Team): TeamGroup {
+function getOpponentGroup(team: Team): 'top' | 'bottom' {
   if (team.league_group === 'championship') return 'top'
   if (team.league_group === 'relegation') return 'bottom'
 
   return team.rank <= 6 ? 'top' : 'bottom'
+}
+
+function buildPossessionGroups(stats: MatchTeamStats[]) {
+  const possessionByTeam = new Map<number, number[]>()
+
+  for (const row of stats) {
+    if (row.team_id === AUSTRIA_ID || row.ball_possession === null) continue
+
+    const values = possessionByTeam.get(row.team_id) ?? []
+    values.push(row.ball_possession)
+    possessionByTeam.set(row.team_id, values)
+  }
+
+  const teamsByPossession = Array.from(possessionByTeam.entries())
+    .map(([teamId, values]) => ({
+      teamId,
+      possession: average(values),
+    }))
+    .filter(
+      (team): team is { teamId: number; possession: number } =>
+        team.possession !== null
+    )
+    .sort((a, b) => b.possession - a.possession)
+
+  const strongTeamCount = Math.ceil(teamsByPossession.length / 2)
+  const possessionGroups = new Map<number, PossessionGroup>()
+
+  teamsByPossession.forEach((team, index) => {
+    possessionGroups.set(
+      team.teamId,
+      index < strongTeamCount ? 'possessionStrong' : 'possessionWeak'
+    )
+  })
+
+  return possessionGroups
 }
 
 function average(values: Array<number | null | undefined>) {
@@ -127,10 +187,24 @@ function buildSummaries(
   stats: MatchTeamStats[]
 ) {
   const teamsById = new Map(teams.map((team) => [team.id, team]))
-  const statsByMatchId = new Map(stats.map((row) => [row.match_id, row]))
+  const austriaStatsByMatchId = new Map(
+    stats
+      .filter((row) => row.team_id === AUSTRIA_ID)
+      .map((row) => [row.match_id, row])
+  )
+  const possessionGroupsByTeamId = buildPossessionGroups(stats)
 
   return emptySummaries.map((summary) => {
     const groupMatches = matches.filter((match) => {
+      const opponentId = getOpponentId(match)
+
+      if (
+        summary.key === 'possessionStrong' ||
+        summary.key === 'possessionWeak'
+      ) {
+        return possessionGroupsByTeamId.get(opponentId) === summary.key
+      }
+
       const opponent = teamsById.get(getOpponentId(match))
 
       return opponent ? getOpponentGroup(opponent) === summary.key : false
@@ -138,7 +212,7 @@ function buildSummaries(
 
     const results = groupMatches.map((match) => getResult(match))
     const groupStats = groupMatches
-      .map((match) => statsByMatchId.get(match.id))
+      .map((match) => austriaStatsByMatchId.get(match.id))
       .filter((row): row is MatchTeamStats => Boolean(row))
 
     return {
@@ -253,7 +327,6 @@ export default function StatisticsView() {
         .select(
           'match_id, team_id, ball_possession, total_shots, shots_on_goal, corner_kicks'
         )
-        .eq('team_id', AUSTRIA_ID)
 
       const error = teamsError || matchesError || statsError
 
@@ -298,7 +371,7 @@ export default function StatisticsView() {
         <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
         <h1 className="text-3xl font-bold tracking-tight">Statistiken</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Austria Wien im Vergleich gegen Top 6 und Bottom 6 Teams.
+          Austria Wien nach Ligaposition und gegnerischem Ballbesitzprofil.
         </p>
       </header>
 
