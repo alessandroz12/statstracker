@@ -1,4 +1,4 @@
-type View = 'dashboard' | 'statistics'
+type View = 'dashboard' | 'statistics' | 'players'
 
 type SidebarProps = {
   activeView: View
@@ -44,6 +44,14 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
           className={navClass('statistics')}
         >
           Statistiken
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveView('players')}
+          className={navClass('players')}
+        >
+          Spieler
         </button>
       </nav>
     </aside>

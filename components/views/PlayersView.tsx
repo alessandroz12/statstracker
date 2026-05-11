@@ -1,0 +1,232 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { supabase } from '@/lib/supabase'
+
+const AUSTRIA_ID = 601
+const LEAGUE_ID = 218
+const SEASON = 2024
+
+type Player = {
+  id: number
+  name: string
+  photo_url: string | null
+}
+
+type PlayerSeasonStats = {
+  player_id: number
+  appearances: number
+  goals: number
+  assists: number
+  yellow_cards: number
+  red_cards: number
+}
+
+type PlayerRow = Player & PlayerSeasonStats
+
+type LoadState = {
+  loading: boolean
+  error: string | null
+  players: PlayerRow[]
+}
+
+function StatCell({ value }: { value: number }) {
+  return <td className="px-5 py-4 text-right tabular-nums">{value}</td>
+}
+
+export default function PlayersView() {
+  const [state, setState] = useState<LoadState>({
+    loading: true,
+    error: null,
+    players: [],
+  })
+
+  useEffect(() => {
+    async function loadData() {
+      const { data: playersData, error: playersError } = await supabase
+        .from('players')
+        .select('id, name, photo_url')
+
+      const { data: statsData, error: statsError } = await supabase
+        .from('player_season_stats')
+        .select('player_id, appearances, goals, assists, yellow_cards, red_cards')
+        .eq('team_id', AUSTRIA_ID)
+        .eq('league_id', LEAGUE_ID)
+        .eq('season', SEASON)
+
+      const error = playersError || statsError
+
+      if (error) {
+        setState({
+          loading: false,
+          error: error.message,
+          players: [],
+        })
+        return
+      }
+
+      const playersById = new Map(
+        ((playersData ?? []) as Player[]).map((player) => [player.id, player])
+      )
+
+      const rows = ((statsData ?? []) as PlayerSeasonStats[])
+        .map((stats) => {
+          const player = playersById.get(stats.player_id)
+
+          if (!player) return null
+
+          return {
+            ...player,
+            ...stats,
+          }
+        })
+        .filter((row): row is PlayerRow => Boolean(row))
+        .sort((a, b) => b.appearances - a.appearances || b.goals - a.goals)
+
+      setState({
+        loading: false,
+        error: null,
+        players: rows,
+      })
+    }
+
+    loadData()
+  }, [])
+
+  const totals = useMemo(
+    () =>
+      state.players.reduce(
+        (sum, player) => ({
+          appearances: sum.appearances + player.appearances,
+          goals: sum.goals + player.goals,
+          assists: sum.assists + player.assists,
+          yellowCards: sum.yellowCards + player.yellow_cards,
+          redCards: sum.redCards + player.red_cards,
+        }),
+        {
+          appearances: 0,
+          goals: 0,
+          assists: 0,
+          yellowCards: 0,
+          redCards: 0,
+        }
+      ),
+    [state.players]
+  )
+
+  if (state.loading) {
+    return <p className="text-slate-400">Spieler werden geladen...</p>
+  }
+
+  if (state.error) {
+    return (
+      <p className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+        Spieler konnten nicht geladen werden: {state.error}
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <header className="mb-8">
+        <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
+        <h1 className="text-3xl font-bold tracking-tight">Spieler</h1>
+        <p className="mt-2 text-sm text-slate-400">
+          Kaderstatistiken fuer Austria Wien.
+        </p>
+      </header>
+
+      <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase text-slate-400">Spieler</p>
+          <p className="mt-3 text-3xl font-bold">{state.players.length}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase text-slate-400">Einsaetze</p>
+          <p className="mt-3 text-3xl font-bold">{totals.appearances}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase text-slate-400">Tore</p>
+          <p className="mt-3 text-3xl font-bold">{totals.goals}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase text-slate-400">Assists</p>
+          <p className="mt-3 text-3xl font-bold">{totals.assists}</p>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+          <p className="text-xs uppercase text-slate-400">Karten</p>
+          <p className="mt-3 text-3xl font-bold">
+            {totals.yellowCards}/{totals.redCards}
+          </p>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-xl shadow-black/20">
+        <div className="border-b border-white/10 p-5">
+          <h2 className="font-semibold">Kader</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Sortiert nach Einsaetzen.
+          </p>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-white/[0.04] text-xs uppercase text-slate-400">
+              <tr>
+                <th className="px-5 py-3 text-left">Spieler</th>
+                <th className="px-5 py-3 text-right">Spiele</th>
+                <th className="px-5 py-3 text-right">Tore</th>
+                <th className="px-5 py-3 text-right">Assists</th>
+                <th className="px-5 py-3 text-right">Gelb</th>
+                <th className="px-5 py-3 text-right">Rot</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {state.players.length === 0 ? (
+                <tr>
+                  <td className="px-5 py-8 text-center text-slate-400" colSpan={6}>
+                    Noch keine Spielerstatistiken vorhanden.
+                  </td>
+                </tr>
+              ) : (
+                state.players.map((player) => (
+                  <tr
+                    key={player.id}
+                    className="border-t border-white/5 text-slate-300 hover:bg-white/[0.03]"
+                  >
+                    <td className="px-5 py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-white/10">
+                          {player.photo_url ? (
+                            <img
+                              src={player.photo_url}
+                              alt={`${player.name} Foto`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-bold">
+                              {player.name.slice(0, 1)}
+                            </span>
+                          )}
+                        </div>
+                        <span className="font-medium text-slate-100">
+                          {player.name}
+                        </span>
+                      </div>
+                    </td>
+                    <StatCell value={player.appearances} />
+                    <StatCell value={player.goals} />
+                    <StatCell value={player.assists} />
+                    <StatCell value={player.yellow_cards} />
+                    <StatCell value={player.red_cards} />
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </>
+  )
+}
