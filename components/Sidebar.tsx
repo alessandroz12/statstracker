@@ -5,6 +5,8 @@ type SidebarProps = {
   setActiveView: (view: View) => void
 }
 
+const AUSTRIA_LOGO_URL = 'https://media.api-sports.io/football/teams/601.png'
+
 const navItems: Array<{ label: string; view: View }> = [
   { label: 'Dashboard', view: 'dashboard' },
   { label: 'Statistiken', view: 'statistics' },
@@ -24,15 +26,18 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
     <>
       <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0B1020]/95 px-4 py-4 backdrop-blur lg:hidden">
         <div className="mb-4 flex items-center gap-3">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-violet-600 text-lg font-bold">
-            A
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+            <img
+              src={AUSTRIA_LOGO_URL}
+              alt="Austria Wien Logo"
+              className="h-8 w-8 object-contain"
+            />
           </div>
 
           <div className="min-w-0">
             <p className="truncate text-sm font-bold uppercase tracking-wide">
               Austria Wien
             </p>
-            <p className="text-xs text-slate-400">Stats</p>
           </div>
         </div>
 
@@ -60,15 +65,18 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
 
       <aside className="hidden w-64 shrink-0 border-r border-white/10 bg-[#0B1020] p-6 lg:block">
         <div className="mb-10 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-violet-600 text-lg font-bold">
-            A
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-white/10">
+            <img
+              src={AUSTRIA_LOGO_URL}
+              alt="Austria Wien Logo"
+              className="h-8 w-8 object-contain"
+            />
           </div>
 
           <div>
             <p className="text-sm font-bold uppercase tracking-wide">
               Austria Wien
             </p>
-            <p className="text-xs text-slate-400">Stats</p>
           </div>
         </div>
 

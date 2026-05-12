@@ -35,6 +35,18 @@ function getTeamName(team: Team) {
   return team.display_name || team.name
 }
 
+function getTeamById(teams: Team[], teamId: number) {
+  return teams.find((team) => team.id === teamId)
+}
+
+function getMatchTeamName(match: Match, teams: Team[], teamId: number) {
+  const team = getTeamById(teams, teamId)
+
+  if (team) return getTeamName(team)
+  if (teamId === match.home_team_id) return getDisplayName(match.home_team_name)
+  return getDisplayName(match.away_team_name)
+}
+
 function getResult(match: Match) {
   const isHome = match.home_team_id === AUSTRIA_ID
   const austriaGoals = isHome ? match.home_goals : match.away_goals
@@ -51,24 +63,6 @@ function getPoints(match: Match) {
   if (result === 'S') return 3
   if (result === 'U') return 1
   return 0
-}
-
-function getOpponent(match: Match, teams: Team[]) {
-  const opponentId =
-    match.home_team_id === AUSTRIA_ID ? match.away_team_id : match.home_team_id
-  const fallbackName =
-    match.home_team_id === AUSTRIA_ID
-      ? match.away_team_name
-      : match.home_team_name
-  const opponent = teams.find((team) => team.id === opponentId)
-
-  return opponent ? getTeamName(opponent) : getDisplayName(fallbackName)
-}
-
-function getScore(match: Match) {
-  return match.home_team_id === AUSTRIA_ID
-    ? `${match.home_goals}:${match.away_goals}`
-    : `${match.away_goals}:${match.home_goals}`
 }
 
 function resultClass(result: string) {
@@ -162,6 +156,28 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
   )
 }
 
+function MatchTeamLogo({
+  name,
+  team,
+}: {
+  name: string
+  team: Team | undefined
+}) {
+  return (
+    <div className="mx-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10">
+      {team?.logo_url ? (
+        <img
+          src={team.logo_url}
+          alt={`${name} Logo`}
+          className="h-8 w-8 object-contain"
+        />
+      ) : (
+        <span className="text-xs font-bold">{name.slice(0, 1)}</span>
+      )}
+    </div>
+  )
+}
+
 function FormPointChart({ points }: { points: number[] }) {
   if (points.length === 0) {
     return <p className="mt-4 text-sm text-slate-400">Keine Formdaten.</p>
@@ -250,6 +266,67 @@ function FormPointChart({ points }: { points: number[] }) {
         <span>neu</span>
       </div>
     </div>
+  )
+}
+
+function RecentMatches({ matches, teams }: { matches: Match[]; teams: Team[] }) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+      <h2 className="font-semibold">Letzte Spiele</h2>
+      <p className="mt-1 text-xs text-slate-400">
+        Ergebnisse der letzten 5 Austria-Spiele.
+      </p>
+
+      <div className="mt-5 grid gap-3 lg:grid-cols-5">
+        {matches.map((match) => {
+          const result = getResult(match)
+          const homeTeam = getTeamById(teams, match.home_team_id)
+          const awayTeam = getTeamById(teams, match.away_team_id)
+          const homeName = getMatchTeamName(match, teams, match.home_team_id)
+          const awayName = getMatchTeamName(match, teams, match.away_team_id)
+
+          return (
+            <article
+              key={match.id}
+              className="rounded-xl border border-white/10 bg-[#0B1020] p-4"
+            >
+              <div className="mb-4 flex items-center justify-between gap-3 text-xs text-slate-400">
+                <span>{new Date(match.date).toLocaleDateString('de-AT')}</span>
+                <span
+                  className={`rounded-full border px-2 py-1 font-bold ${resultClass(
+                    result
+                  )}`}
+                >
+                  {result}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3">
+                <div className="min-w-0 text-center">
+                  <MatchTeamLogo name={homeName} team={homeTeam} />
+                  <p className="mt-2 truncate text-xs font-medium text-slate-200">
+                    {homeName}
+                  </p>
+                </div>
+
+                <p className="rounded-lg bg-white/5 px-3 py-2 text-center text-xl font-bold text-violet-200">
+                  {match.home_goals}:{match.away_goals}
+                </p>
+
+                <div className="min-w-0 text-center">
+                  <div className="flex justify-center">
+                    <MatchTeamLogo name={awayName} team={awayTeam} />
+                  </div>
+                  <p className="mt-2 truncate text-xs font-medium text-slate-200">
+                    {awayName}
+                  </p>
+                </div>
+              </div>
+            </article>
+          )
+        })}
+      </div>
+    </section>
   )
 }
 
@@ -368,54 +445,9 @@ export default function DashboardView() {
         </div>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[1.3fr_0.8fr]">
-        <div className="space-y-6">
-          <TableBlock title={visibleTableTitle} teams={visibleTeams} />
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <h2 className="font-semibold">Letzte Spiele</h2>
-          <p className="mt-1 text-xs text-slate-400">
-            Ergebnisse aus Austria-Sicht.
-          </p>
-
-          <div className="mt-5 space-y-3">
-            {matches.map((match) => {
-              const result = getResult(match)
-
-              return (
-                <div
-                  key={match.id}
-                  className="rounded-xl border border-white/10 bg-[#0B1020] p-4"
-                >
-                  <div className="mb-3 flex items-center justify-between text-xs text-slate-400">
-                    <span>{new Date(match.date).toLocaleDateString('de-AT')}</span>
-                    <span
-                      className={`rounded-full border px-2 py-1 font-bold ${resultClass(
-                        result
-                      )}`}
-                    >
-                      {result}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">Austria Wien</p>
-                      <p className="text-sm text-slate-400">
-                        vs. {getOpponent(match, teams)}
-                      </p>
-                    </div>
-
-                    <p className="text-xl font-bold text-violet-300">
-                      {getScore(match)}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
+      <section className="space-y-6">
+        <TableBlock title={visibleTableTitle} teams={visibleTeams} />
+        <RecentMatches matches={matches} teams={teams} />
       </section>
     </>
   )
