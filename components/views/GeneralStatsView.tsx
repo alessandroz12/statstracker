@@ -4,6 +4,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const AUSTRIA_ID = 601
+const LEAGUE_ID = 218
+const SEASON = 2024
+
+type Team = {
+  id: number
+}
 
 type Match = {
   id: number
@@ -29,11 +35,22 @@ type MatchTeamStats = {
   red_cards: number | null
 }
 
+type GoalMinuteStats = {
+  team_id: number
+  league_id: number
+  season: number
+  bucket: string
+  goals_for: number
+  goals_against: number
+}
+
 type LoadState = {
   loading: boolean
   error: string | null
+  teams: Team[]
   matches: Match[]
   stats: MatchTeamStats[]
+  goalMinutes: GoalMinuteStats[]
 }
 
 function average(values: Array<number | null | undefined>) {
@@ -54,6 +71,21 @@ function formatNumber(value: number | null, digits = 1, suffix = '') {
   })}${suffix}`
 }
 
+function getMinuteBucketIndex(bucket: string) {
+  const order = [
+    '0-15',
+    '16-30',
+    '31-45',
+    '46-60',
+    '61-75',
+    '76-90',
+    '91-105',
+    '106-120',
+  ]
+
+  return order.indexOf(bucket)
+}
+
 function getMatchGoals(match: Match) {
   return match.home_team_id === AUSTRIA_ID ? match.home_goals : match.away_goals
 }
@@ -71,19 +103,66 @@ function getResult(match: Match) {
 function StatCard({
   label,
   value,
-  detail,
+  rank,
 }: {
   label: string
   value: string
-  detail: string
+  rank: string
 }) {
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4 shadow-xl shadow-black/20">
       <p className="text-xs text-slate-400">{label}</p>
       <p className="mt-3 text-2xl font-bold text-white">{value}</p>
-      <p className="mt-1 text-xs text-slate-500">{detail}</p>
+      <p className="mt-1 text-xs text-violet-300">{rank}</p>
     </div>
   )
+}
+
+function buildMetricRanks(
+  teams: Team[],
+  stats: MatchTeamStats[],
+  metric: keyof Pick<
+    MatchTeamStats,
+    | 'ball_possession'
+    | 'total_shots'
+    | 'shots_on_goal'
+    | 'passes_percentage'
+    | 'corner_kicks'
+  >
+) {
+  const valuesByTeam = new Map<number, number[]>()
+
+  for (const row of stats) {
+    const value = row[metric]
+    if (typeof value !== 'number') continue
+
+    const values = valuesByTeam.get(row.team_id) ?? []
+    values.push(value)
+    valuesByTeam.set(row.team_id, values)
+  }
+
+  return teams
+    .map((team) => ({
+      teamId: team.id,
+      value: average(valuesByTeam.get(team.id) ?? []),
+    }))
+    .filter(
+      (item): item is { teamId: number; value: number } => item.value !== null
+    )
+    .sort((a, b) => b.value - a.value)
+}
+
+function getRankLabel(
+  teams: Team[],
+  stats: MatchTeamStats[],
+  metric: Parameters<typeof buildMetricRanks>[2]
+) {
+  const ranks = buildMetricRanks(teams, stats, metric)
+  const rank = ranks.findIndex((item) => item.teamId === AUSTRIA_ID)
+
+  if (rank === -1) return 'Liga-Rang -'
+
+  return `Liga-Rang ${rank + 1}/${ranks.length}`
 }
 
 function GoalsLineChart({ matches }: { matches: Match[] }) {
@@ -225,32 +304,46 @@ function ResultLegend({
   )
 }
 
-function BarPanel({
+function MinuteBarPanel({
   title,
   values,
 }: {
   title: string
-  values: Array<{ label: string; value: number }>
+  values: GoalMinuteStats[]
 }) {
-  const maxValue = Math.max(1, ...values.map((item) => item.value))
+  const maxValue = Math.max(
+    1,
+    ...values.map((item) =>
+      title.includes('Erzielte') ? item.goals_for : item.goals_against
+    )
+  )
 
   return (
     <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
       <h2 className="font-semibold">{title}</h2>
       <div className="mt-5 flex h-40 items-end gap-4">
         {values.map((item) => (
-          <div key={item.label} className="flex flex-1 flex-col items-center">
+          <div key={item.bucket} className="flex flex-1 flex-col items-center">
             <span className="mb-2 text-xs font-semibold text-slate-200">
-              {formatNumber(item.value, 1)}
+              {title.includes('Erzielte')
+                ? item.goals_for
+                : item.goals_against}
             </span>
             <div
               className="w-full rounded-t-lg bg-violet-500"
               style={{
-                height: `${Math.max((item.value / maxValue) * 100, 8)}%`,
+                height: `${Math.max(
+                  (((title.includes('Erzielte')
+                    ? item.goals_for
+                    : item.goals_against) || 0) /
+                    maxValue) *
+                    100,
+                  8
+                )}%`,
               }}
             />
             <span className="mt-2 text-center text-[10px] text-slate-500">
-              {item.label}
+              {item.bucket}
             </span>
           </div>
         ))}
@@ -263,12 +356,18 @@ export default function GeneralStatsView() {
   const [state, setState] = useState<LoadState>({
     loading: true,
     error: null,
+    teams: [],
     matches: [],
     stats: [],
+    goalMinutes: [],
   })
 
   useEffect(() => {
     async function loadData() {
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('teams')
+        .select('id')
+
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
         .select(
@@ -283,16 +382,24 @@ export default function GeneralStatsView() {
         .select(
           'match_id, team_id, ball_possession, total_shots, shots_on_goal, shots_off_goal, blocked_shots, corner_kicks, passes_percentage, yellow_cards, red_cards'
         )
-        .eq('team_id', AUSTRIA_ID)
 
-      const error = matchesError || statsError
+      const { data: minuteData } = await supabase
+        .from('team_goal_minute_stats')
+        .select('team_id, league_id, season, bucket, goals_for, goals_against')
+        .eq('team_id', AUSTRIA_ID)
+        .eq('league_id', LEAGUE_ID)
+        .eq('season', SEASON)
+
+      const error = teamsError || matchesError || statsError
 
       if (error) {
         setState({
           loading: false,
           error: error.message,
+          teams: [],
           matches: [],
           stats: [],
+          goalMinutes: [],
         })
         return
       }
@@ -300,8 +407,12 @@ export default function GeneralStatsView() {
       setState({
         loading: false,
         error: null,
+        teams: (teamsData ?? []) as Team[],
         matches: (matchesData ?? []) as Match[],
         stats: (statsData ?? []) as MatchTeamStats[],
+        goalMinutes: ((minuteData ?? []) as GoalMinuteStats[]).sort(
+          (a, b) => getMinuteBucketIndex(a.bucket) - getMinuteBucketIndex(b.bucket)
+        ),
       })
     }
 
@@ -310,18 +421,15 @@ export default function GeneralStatsView() {
 
   const summary = useMemo(() => {
     const goals = state.matches.map((match) => getMatchGoals(match))
+    const austriaStats = state.stats.filter((row) => row.team_id === AUSTRIA_ID)
 
     return {
-      ballPossession: average(state.stats.map((row) => row.ball_possession)),
-      shots: average(state.stats.map((row) => row.total_shots)),
-      shotsOnGoal: average(state.stats.map((row) => row.shots_on_goal)),
-      passAccuracy: average(state.stats.map((row) => row.passes_percentage)),
-      corners: average(state.stats.map((row) => row.corner_kicks)),
+      ballPossession: average(austriaStats.map((row) => row.ball_possession)),
+      shots: average(austriaStats.map((row) => row.total_shots)),
+      shotsOnGoal: average(austriaStats.map((row) => row.shots_on_goal)),
+      passAccuracy: average(austriaStats.map((row) => row.passes_percentage)),
+      corners: average(austriaStats.map((row) => row.corner_kicks)),
       goalsPerGame: average(goals),
-      shotsOffGoal: average(state.stats.map((row) => row.shots_off_goal)) ?? 0,
-      blockedShots: average(state.stats.map((row) => row.blocked_shots)) ?? 0,
-      yellowCards: average(state.stats.map((row) => row.yellow_cards)) ?? 0,
-      redCards: average(state.stats.map((row) => row.red_cards)) ?? 0,
     }
   }, [state.matches, state.stats])
 
@@ -355,48 +463,35 @@ export default function GeneralStatsView() {
         <StatCard
           label="Ballbesitz"
           value={formatNumber(summary.ballPossession, 1, ' %')}
-          detail="pro Spiel"
+          rank={getRankLabel(state.teams, state.stats, 'ball_possession')}
         />
         <StatCard
           label="Schuesse pro Spiel"
           value={formatNumber(summary.shots)}
-          detail="gesamt"
+          rank={getRankLabel(state.teams, state.stats, 'total_shots')}
         />
         <StatCard
           label="Schuesse aufs Tor"
           value={formatNumber(summary.shotsOnGoal)}
-          detail="pro Spiel"
+          rank={getRankLabel(state.teams, state.stats, 'shots_on_goal')}
         />
         <StatCard
           label="Passgenauigkeit"
           value={formatNumber(summary.passAccuracy, 1, ' %')}
-          detail="pro Spiel"
+          rank={getRankLabel(state.teams, state.stats, 'passes_percentage')}
         />
         <StatCard
           label="Ecken pro Spiel"
           value={formatNumber(summary.corners)}
-          detail="Standarddruck"
+          rank={getRankLabel(state.teams, state.stats, 'corner_kicks')}
         />
       </section>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <GoalsLineChart matches={state.matches} />
         <ResultsChart matches={state.matches} />
-        <BarPanel
-          title="Schussverteilung"
-          values={[
-            { label: 'aufs Tor', value: summary.shotsOnGoal ?? 0 },
-            { label: 'daneben', value: summary.shotsOffGoal },
-            { label: 'geblockt', value: summary.blockedShots },
-          ]}
-        />
-        <BarPanel
-          title="Disziplin"
-          values={[
-            { label: 'Gelb', value: summary.yellowCards },
-            { label: 'Rot', value: summary.redCards },
-          ]}
-        />
+        <MinuteBarPanel title="Erzielte Tore nach Minuten" values={state.goalMinutes} />
+        <MinuteBarPanel title="Bekommene Tore nach Minuten" values={state.goalMinutes} />
       </div>
     </>
   )
