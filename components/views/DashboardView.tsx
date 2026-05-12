@@ -45,6 +45,14 @@ function getResult(match: Match) {
   return 'U'
 }
 
+function getPoints(match: Match) {
+  const result = getResult(match)
+
+  if (result === 'S') return 3
+  if (result === 'U') return 1
+  return 0
+}
+
 function getOpponent(match: Match, teams: Team[]) {
   const opponentId =
     match.home_team_id === AUSTRIA_ID ? match.away_team_id : match.home_team_id
@@ -152,6 +160,97 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
   )
 }
 
+function FormPointChart({ points }: { points: number[] }) {
+  if (points.length === 0) {
+    return <p className="mt-4 text-sm text-slate-400">Keine Formdaten.</p>
+  }
+
+  const chartWidth = 240
+  const chartHeight = 80
+  const minX = 18
+  const maxX = 222
+  const minY = 16
+  const maxY = 66
+  const xStep = points.length > 1 ? (maxX - minX) / (points.length - 1) : 0
+  const coordinates = points.map((point, index) => ({
+    x: minX + index * xStep,
+    y: maxY - (point / 3) * (maxY - minY),
+  }))
+  const polyline = coordinates.map((point) => `${point.x},${point.y}`).join(' ')
+  const averagePoints =
+    points.reduce((sum, point) => sum + point, 0) / points.length
+
+  return (
+    <div className="mt-4">
+      <svg
+        className="h-20 w-full overflow-visible"
+        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+        role="img"
+        aria-label="Punkteausbeute der letzten Spiele"
+      >
+        {[0, 1, 3].map((tick) => {
+          const y = maxY - (tick / 3) * (maxY - minY)
+
+          return (
+            <g key={tick}>
+              <line
+                x1={minX}
+                x2={maxX}
+                y1={y}
+                y2={y}
+                className="stroke-white/10"
+                strokeWidth="1"
+              />
+              <text
+                x="0"
+                y={y + 4}
+                className="fill-slate-500 text-[10px]"
+              >
+                {tick}
+              </text>
+            </g>
+          )
+        })}
+
+        <polyline
+          points={polyline}
+          fill="none"
+          className="stroke-violet-300"
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+
+        {coordinates.map((point, index) => (
+          <circle
+            key={`${point.x}-${point.y}`}
+            cx={point.x}
+            cy={point.y}
+            r="5"
+            className="fill-violet-400 stroke-[#0B1020]"
+            strokeWidth="3"
+          >
+            <title>
+              Spiel {index + 1}: {points[index]} Punkte
+            </title>
+          </circle>
+        ))}
+      </svg>
+
+      <div className="mt-3 flex items-center justify-between text-xs text-slate-500">
+        <span>alt</span>
+        <span className="font-medium text-violet-300">
+          {averagePoints.toLocaleString('de-AT', {
+            maximumFractionDigits: 1,
+          })}{' '}
+          Pkt/Spiel
+        </span>
+        <span>neu</span>
+      </div>
+    </div>
+  )
+}
+
 export default function DashboardView() {
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
@@ -214,10 +313,10 @@ export default function DashboardView() {
 
   const austriaRank = austria?.rank ?? '-'
 
-  const form = matches
+  const formPoints = matches
     .slice()
     .reverse()
-    .map((match) => getResult(match))
+    .map((match) => getPoints(match))
 
   return (
     <>
@@ -262,18 +361,7 @@ export default function DashboardView() {
 
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
           <p className="text-xs uppercase text-slate-400">Form</p>
-          <div className="mt-4 flex gap-2">
-            {form.map((result, index) => (
-              <span
-                key={index}
-                className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold ${resultClass(
-                  result
-                )}`}
-              >
-                {result}
-              </span>
-            ))}
-          </div>
+          <FormPointChart points={formPoints} />
           <p className="mt-3 text-xs text-slate-500">Letzte 5 Spiele</p>
         </div>
       </section>

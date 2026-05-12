@@ -42,6 +42,7 @@ type GroupSummary = {
   wins: number
   draws: number
   losses: number
+  pointsPerGame: number | null
   ballPossession: number | null
   totalShots: number | null
   shotsOnGoal: number | null
@@ -62,6 +63,7 @@ const emptySummaries: GroupSummary[] = [
     wins: 0,
     draws: 0,
     losses: 0,
+    pointsPerGame: null,
     ballPossession: null,
     totalShots: null,
     shotsOnGoal: null,
@@ -74,6 +76,7 @@ const emptySummaries: GroupSummary[] = [
     wins: 0,
     draws: 0,
     losses: 0,
+    pointsPerGame: null,
     ballPossession: null,
     totalShots: null,
     shotsOnGoal: null,
@@ -86,6 +89,7 @@ const emptySummaries: GroupSummary[] = [
     wins: 0,
     draws: 0,
     losses: 0,
+    pointsPerGame: null,
     ballPossession: null,
     totalShots: null,
     shotsOnGoal: null,
@@ -98,6 +102,7 @@ const emptySummaries: GroupSummary[] = [
     wins: 0,
     draws: 0,
     losses: 0,
+    pointsPerGame: null,
     ballPossession: null,
     totalShots: null,
     shotsOnGoal: null,
@@ -119,6 +124,12 @@ function getResult(match: Match) {
   if (austriaGoals > opponentGoals) return 'win'
   if (austriaGoals < opponentGoals) return 'loss'
   return 'draw'
+}
+
+function getPoints(result: 'win' | 'draw' | 'loss') {
+  if (result === 'win') return 3
+  if (result === 'draw') return 1
+  return 0
 }
 
 function getOpponentGroup(team: Team): 'top' | 'bottom' {
@@ -181,6 +192,14 @@ function formatAverage(value: number | null, suffix = '') {
   })}${suffix}`
 }
 
+function formatPoints(value: number | null) {
+  if (value === null) return '-'
+
+  return value.toLocaleString('de-AT', {
+    maximumFractionDigits: 2,
+  })
+}
+
 function buildSummaries(
   matches: Match[],
   teams: Team[],
@@ -211,6 +230,10 @@ function buildSummaries(
     })
 
     const results = groupMatches.map((match) => getResult(match))
+    const points = results.reduce(
+      (sum, result) => sum + getPoints(result),
+      0
+    )
     const groupStats = groupMatches
       .map((match) => austriaStatsByMatchId.get(match.id))
       .filter((row): row is MatchTeamStats => Boolean(row))
@@ -221,6 +244,8 @@ function buildSummaries(
       wins: results.filter((result) => result === 'win').length,
       draws: results.filter((result) => result === 'draw').length,
       losses: results.filter((result) => result === 'loss').length,
+      pointsPerGame:
+        groupMatches.length > 0 ? points / groupMatches.length : null,
       ballPossession: average(groupStats.map((row) => row.ball_possession)),
       totalShots: average(groupStats.map((row) => row.total_shots)),
       shotsOnGoal: average(groupStats.map((row) => row.shots_on_goal)),
@@ -255,6 +280,49 @@ function MetricRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+function PointsBarChart({ summaries }: { summaries: GroupSummary[] }) {
+  return (
+    <section className="mb-6 rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Punkteschnitt</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Punkte pro Spiel in den vier Vergleichsgruppen.
+          </p>
+        </div>
+        <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200">
+          max. 3,00
+        </span>
+      </div>
+
+      <div className="space-y-4">
+        {summaries.map((summary) => {
+          const value = summary.pointsPerGame ?? 0
+          const width = `${Math.min((value / 3) * 100, 100)}%`
+
+          return (
+            <div key={summary.key}>
+              <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                <span className="text-slate-300">{summary.title}</span>
+                <span className="font-semibold text-violet-200">
+                  {formatPoints(summary.pointsPerGame)}
+                </span>
+              </div>
+
+              <div className="h-3 overflow-hidden rounded-full bg-[#0B1020]">
+                <div
+                  className="h-full rounded-full bg-violet-400"
+                  style={{ width }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 function SummaryBlock({ summary }: { summary: GroupSummary }) {
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
@@ -286,6 +354,10 @@ function SummaryBlock({ summary }: { summary: GroupSummary }) {
       </div>
 
       <div className="mt-6 rounded-xl border border-white/10 bg-[#0B1020] px-4">
+        <MetricRow
+          label="Punkteschnitt"
+          value={`${formatPoints(summary.pointsPerGame)} Pkt/Spiel`}
+        />
         <MetricRow
           label="Ballbesitz"
           value={formatAverage(summary.ballPossession, ' %')}
@@ -374,6 +446,8 @@ export default function StatisticsView() {
           Austria Wien nach Ligaposition und gegnerischem Ballbesitzprofil.
         </p>
       </header>
+
+      <PointsBarChart summaries={state.summaries} />
 
       <div className="grid gap-6 xl:grid-cols-2">
         {state.summaries.map((summary) => (
