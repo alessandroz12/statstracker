@@ -13,10 +13,10 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#070B17] text-slate-100">
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen flex-col lg:flex-row">
         <Sidebar activeView={activeView} setActiveView={setActiveView} />
 
-        <section className="flex-1 p-6 lg:p-10">
+        <section className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
           {activeView === 'dashboard' && <DashboardView />}
           {activeView === 'statistics' && <StatisticsView />}
           {activeView === 'players' && <PlayersView />}

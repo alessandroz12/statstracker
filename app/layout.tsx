@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Austria Wien StatsTracker",
+  title: "Austria Wien Stats",
   description: "Dashboard und Statistiken fuer die Austria Wien Saison.",
 };
 

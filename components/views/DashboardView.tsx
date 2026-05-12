@@ -103,59 +103,61 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
         </p>
       </div>
 
-      <table className="w-full text-sm">
-        <thead className="bg-white/[0.04] text-xs uppercase text-slate-400">
-          <tr>
-            <th className="px-5 py-3 text-left">#</th>
-            <th className="px-5 py-3 text-left">Team</th>
-            <th className="px-5 py-3 text-right">SP</th>
-            <th className="px-5 py-3 text-right">Tore</th>
-            <th className="px-5 py-3 text-right">Diff</th>
-            <th className="px-5 py-3 text-right">Pkt</th>
-          </tr>
-        </thead>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[560px] text-sm">
+          <thead className="bg-white/[0.04] text-xs uppercase text-slate-400">
+            <tr>
+              <th className="px-5 py-3 text-left">#</th>
+              <th className="px-5 py-3 text-left">Team</th>
+              <th className="px-5 py-3 text-right">SP</th>
+              <th className="px-5 py-3 text-right">Tore</th>
+              <th className="px-5 py-3 text-right">Diff</th>
+              <th className="px-5 py-3 text-right">Pkt</th>
+            </tr>
+          </thead>
 
-        <tbody>
-          {teams.map((team) => {
-            const isAustria = team.id === AUSTRIA_ID
-            const goalDiff = team.goals_scored - team.goals_against
+          <tbody>
+            {teams.map((team) => {
+              const isAustria = team.id === AUSTRIA_ID
+              const goalDiff = team.goals_scored - team.goals_against
 
-            return (
-              <tr
-                key={team.id}
-                className={`border-t border-white/5 ${
-                  isAustria
-                    ? 'bg-violet-600/30 text-white'
-                    : 'text-slate-300 hover:bg-white/[0.03]'
-                }`}
-              >
-                <td className="px-5 py-4">{team.rank}</td>
+              return (
+                <tr
+                  key={team.id}
+                  className={`border-t border-white/5 ${
+                    isAustria
+                      ? 'bg-violet-600/30 text-white'
+                      : 'text-slate-300 hover:bg-white/[0.03]'
+                  }`}
+                >
+                  <td className="px-5 py-4">{team.rank}</td>
 
-                <td className="px-5 py-4">
-                  <div className="flex items-center gap-3">
-                    <TeamLogo team={team} />
-                    <span className="font-medium">{getTeamName(team)}</span>
-                  </div>
-                </td>
+                  <td className="px-5 py-4">
+                    <div className="flex items-center gap-3">
+                      <TeamLogo team={team} />
+                      <span className="font-medium">{getTeamName(team)}</span>
+                    </div>
+                  </td>
 
-                <td className="px-5 py-4 text-right">{team.played}</td>
+                  <td className="px-5 py-4 text-right">{team.played}</td>
 
-                <td className="px-5 py-4 text-right">
-                  {team.goals_scored}:{team.goals_against}
-                </td>
+                  <td className="px-5 py-4 text-right">
+                    {team.goals_scored}:{team.goals_against}
+                  </td>
 
-                <td className="px-5 py-4 text-right">
-                  {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
-                </td>
+                  <td className="px-5 py-4 text-right">
+                    {goalDiff > 0 ? `+${goalDiff}` : goalDiff}
+                  </td>
 
-                <td className="px-5 py-4 text-right font-semibold">
-                  {team.points}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
+                  <td className="px-5 py-4 text-right font-semibold">
+                    {team.points}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
