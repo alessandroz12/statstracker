@@ -1,4 +1,4 @@
-type View = 'dashboard' | 'statistics' | 'players'
+type View = 'dashboard' | 'statistics' | 'advancedStats' | 'players'
 
 type SidebarProps = {
   activeView: View
@@ -10,6 +10,7 @@ const AUSTRIA_LOGO_URL = 'https://media.api-sports.io/football/teams/601.png'
 const navItems: Array<{ label: string; view: View }> = [
   { label: 'Dashboard', view: 'dashboard' },
   { label: 'Statistiken', view: 'statistics' },
+  { label: 'Advanced Stats', view: 'advancedStats' },
   { label: 'Spieler', view: 'players' },
 ]
 
@@ -41,7 +42,7 @@ export default function Sidebar({ activeView, setActiveView }: SidebarProps) {
           </div>
         </div>
 
-        <nav className="grid grid-cols-3 gap-2 text-xs">
+        <nav className="grid grid-cols-2 gap-2 text-xs">
           {navItems.map((item) => {
             const isActive = activeView === item.view
 

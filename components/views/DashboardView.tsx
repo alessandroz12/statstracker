@@ -31,6 +31,12 @@ type Match = {
   status: string
 }
 
+type TeamRecord = {
+  wins: number
+  draws: number
+  losses: number
+}
+
 function getTeamName(team: Team) {
   return team.display_name || team.name
 }
@@ -87,7 +93,48 @@ function TeamLogo({ team }: { team: Team }) {
   )
 }
 
-function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
+function buildTeamRecords(matches: Match[]) {
+  const records = new Map<number, TeamRecord>()
+
+  function getRecord(teamId: number) {
+    const record = records.get(teamId) ?? {
+      wins: 0,
+      draws: 0,
+      losses: 0,
+    }
+
+    records.set(teamId, record)
+    return record
+  }
+
+  for (const match of matches) {
+    const homeRecord = getRecord(match.home_team_id)
+    const awayRecord = getRecord(match.away_team_id)
+
+    if (match.home_goals > match.away_goals) {
+      homeRecord.wins += 1
+      awayRecord.losses += 1
+    } else if (match.home_goals < match.away_goals) {
+      homeRecord.losses += 1
+      awayRecord.wins += 1
+    } else {
+      homeRecord.draws += 1
+      awayRecord.draws += 1
+    }
+  }
+
+  return records
+}
+
+function TableBlock({
+  title,
+  teams,
+  records,
+}: {
+  title: string
+  teams: Team[]
+  records: Map<number, TeamRecord>
+}) {
   return (
     <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-xl shadow-black/20">
       <div className="border-b border-white/10 p-5">
@@ -98,12 +145,15 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[560px] text-sm">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-white/[0.04] text-xs uppercase text-slate-400">
             <tr>
               <th className="px-5 py-3 text-left">#</th>
               <th className="px-5 py-3 text-left">Team</th>
               <th className="px-5 py-3 text-right">SP</th>
+              <th className="px-5 py-3 text-right">S</th>
+              <th className="px-5 py-3 text-right">U</th>
+              <th className="px-5 py-3 text-right">N</th>
               <th className="px-5 py-3 text-right">Tore</th>
               <th className="px-5 py-3 text-right">Diff</th>
               <th className="px-5 py-3 text-right">Pkt</th>
@@ -114,6 +164,7 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
             {teams.map((team) => {
               const isAustria = team.id === AUSTRIA_ID
               const goalDiff = team.goals_scored - team.goals_against
+              const record = records.get(team.id)
 
               return (
                 <tr
@@ -134,6 +185,9 @@ function TableBlock({ title, teams }: { title: string; teams: Team[] }) {
                   </td>
 
                   <td className="px-5 py-4 text-right">{team.played}</td>
+                  <td className="px-5 py-4 text-right">{record?.wins ?? '-'}</td>
+                  <td className="px-5 py-4 text-right">{record?.draws ?? '-'}</td>
+                  <td className="px-5 py-4 text-right">{record?.losses ?? '-'}</td>
 
                   <td className="px-5 py-4 text-right">
                     {team.goals_scored}:{team.goals_against}
@@ -333,6 +387,7 @@ function RecentMatches({ matches, teams }: { matches: Match[]; teams: Team[] }) 
 export default function DashboardView() {
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
+  const [allMatches, setAllMatches] = useState<Match[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -353,8 +408,16 @@ export default function DashboardView() {
         .order('date', { ascending: false })
         .limit(5)
 
+      const { data: allMatchesData } = await supabase
+        .from('matches')
+        .select(
+          'id, date, home_team_id, away_team_id, home_team_name, away_team_name, home_goals, away_goals, status'
+        )
+        .eq('status', 'FT')
+
       setTeams(((teamsData ?? []) as Team[]).sort((a, b) => a.rank - b.rank))
       setMatches((matchesData ?? []) as Match[])
+      setAllMatches((allMatchesData ?? []) as Match[])
       setLoading(false)
     }
 
@@ -391,6 +454,7 @@ export default function DashboardView() {
       : 'Qualifikationsgruppe'
 
   const austriaRank = austria?.rank ?? '-'
+  const tableRecords = buildTeamRecords(allMatches)
 
   const formPoints = matches
     .slice()
@@ -446,7 +510,11 @@ export default function DashboardView() {
       </section>
 
       <section className="space-y-6">
-        <TableBlock title={visibleTableTitle} teams={visibleTeams} />
+        <TableBlock
+          title={visibleTableTitle}
+          teams={visibleTeams}
+          records={tableRecords}
+        />
         <RecentMatches matches={matches} teams={teams} />
       </section>
     </>

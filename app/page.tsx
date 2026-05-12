@@ -3,10 +3,11 @@
 import { useState } from 'react'
 import Sidebar from '@/components/Sidebar'
 import DashboardView from '@/components/views/DashboardView'
+import GeneralStatsView from '@/components/views/GeneralStatsView'
 import PlayersView from '@/components/views/PlayersView'
 import StatisticsView from '@/components/views/StatisticsView'
 
-type View = 'dashboard' | 'statistics' | 'players'
+type View = 'dashboard' | 'statistics' | 'advancedStats' | 'players'
 
 export default function Home() {
   const [activeView, setActiveView] = useState<View>('dashboard')
@@ -18,7 +19,8 @@ export default function Home() {
 
         <section className="min-w-0 flex-1 p-4 sm:p-6 lg:p-10">
           {activeView === 'dashboard' && <DashboardView />}
-          {activeView === 'statistics' && <StatisticsView />}
+          {activeView === 'statistics' && <GeneralStatsView />}
+          {activeView === 'advancedStats' && <StatisticsView />}
           {activeView === 'players' && <PlayersView />}
         </section>
       </div>
