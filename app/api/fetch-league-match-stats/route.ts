@@ -2,6 +2,8 @@ import axios, { AxiosError } from 'axios'
 import { supabase } from '@/lib/supabase'
 
 const REQUEST_DELAY_MS = 7000
+const DEFAULT_MAX_MATCHES = 35
+const HARD_MAX_MATCHES = 35
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
 type Match = {
@@ -47,7 +49,10 @@ export async function GET(request: Request) {
 
   const searchParams = new URL(request.url).searchParams
   const season = Number(searchParams.get('season') ?? 2024)
-  const maxMatches = Math.min(Number(searchParams.get('max') ?? 80), 80)
+  const maxMatches = Math.min(
+    Number(searchParams.get('max') ?? DEFAULT_MAX_MATCHES),
+    HARD_MAX_MATCHES
+  )
 
   const { data: matches, error: matchError } = await supabase
     .from('matches')
@@ -71,7 +76,8 @@ export async function GET(request: Request) {
     ((matches ?? []) as Match[]).filter(
       (match) => !existingMatchIds.has(match.id)
     ).slice(0, maxMatches) ?? []
-  const rows = []
+  let fetchedMatches = 0
+  let insertedRows = 0
 
   for (const match of matchesToFetch) {
     try {
@@ -86,6 +92,8 @@ export async function GET(request: Request) {
           },
         }
       )
+
+      const rows = []
 
       for (const teamStats of response.data.response as TeamStatisticsResponseItem[]) {
         const stats = teamStats.statistics
@@ -113,6 +121,27 @@ export async function GET(request: Request) {
         })
       }
 
+      const { error } = await supabase
+        .from('match_team_stats')
+        .upsert(rows, { onConflict: 'match_id,team_id' })
+
+      if (error) {
+        return Response.json(
+          {
+            success: false,
+            message: 'Fehler beim Speichern der Liga-Stats',
+            matchId: match.id,
+            error,
+            fetchedMatches,
+            insertedRows,
+          },
+          { status: 500 }
+        )
+      }
+
+      fetchedMatches += 1
+      insertedRows += rows.length
+
       await sleep(REQUEST_DELAY_MS)
     } catch (error) {
       const apiError = error as AxiosError
@@ -124,31 +153,27 @@ export async function GET(request: Request) {
           matchId: match.id,
           status: apiError.response?.status,
           apiError: apiError.response?.data,
+          fetchedMatches,
+          insertedRows,
         },
         { status: 500 }
       )
     }
   }
 
-  if (rows.length === 0) {
+  if (fetchedMatches === 0) {
     return Response.json({
       success: true,
       message: 'Keine neuen Liga-Matches zu fetchen',
+      maxMatches,
+      season,
     })
-  }
-
-  const { error } = await supabase
-    .from('match_team_stats')
-    .upsert(rows, { onConflict: 'match_id,team_id' })
-
-  if (error) {
-    return Response.json({ success: false, error }, { status: 500 })
   }
 
   return Response.json({
     success: true,
-    fetchedMatches: matchesToFetch.length,
-    insertedRows: rows.length,
+    fetchedMatches,
+    insertedRows,
     maxMatches,
     season,
   })
