@@ -2,7 +2,6 @@ import axios, { AxiosError } from 'axios'
 import { supabase } from '@/lib/supabase'
 
 const LEAGUE_ID = 218
-const SEASON = 2024
 const REQUEST_DELAY_MS = 7000
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
@@ -35,13 +34,15 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
   const { data: teams, error: teamsError } = await supabase
     .from('teams')
@@ -64,7 +65,7 @@ export async function GET() {
           },
           params: {
             league: LEAGUE_ID,
-            season: SEASON,
+            season,
             team: team.id,
           },
         }
@@ -81,7 +82,7 @@ export async function GET() {
         rows.push({
           team_id: team.id,
           league_id: LEAGUE_ID,
-          season: SEASON,
+          season,
           bucket,
           goals_for: goalsFor[bucket]?.total ?? 0,
           goals_against: goalsAgainst[bucket]?.total ?? 0,

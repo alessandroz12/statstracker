@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import SeasonSelector from '@/components/SeasonSelector'
 import { supabase } from '@/lib/supabase'
+import { getSeasonLabel } from '@/lib/seasons'
 
 const AUSTRIA_ID = 601
 const LEAGUE_ID = 218
-const SEASON = 2024
 
 type Team = {
   id: number
@@ -49,6 +50,7 @@ type LoadState = {
   error: string | null
   teams: Team[]
   matches: Match[]
+  leagueMatches: Match[]
   stats: MatchTeamStats[]
   goalMinutes: GoalMinuteStats[]
 }
@@ -352,12 +354,21 @@ function MinuteBarPanel({
   )
 }
 
-export default function GeneralStatsView() {
+type GeneralStatsViewProps = {
+  selectedSeason: number
+  setSelectedSeason: (season: number) => void
+}
+
+export default function GeneralStatsView({
+  selectedSeason,
+  setSelectedSeason,
+}: GeneralStatsViewProps) {
   const [state, setState] = useState<LoadState>({
     loading: true,
     error: null,
     teams: [],
     matches: [],
+    leagueMatches: [],
     stats: [],
     goalMinutes: [],
   })
@@ -374,8 +385,18 @@ export default function GeneralStatsView() {
           'id, date, home_team_id, away_team_id, home_goals, away_goals, status'
         )
         .eq('status', 'FT')
+        .eq('season', selectedSeason)
         .or(`home_team_id.eq.${AUSTRIA_ID},away_team_id.eq.${AUSTRIA_ID}`)
         .order('date', { ascending: true })
+
+      const { data: leagueMatchesData, error: leagueMatchesError } =
+        await supabase
+          .from('matches')
+          .select(
+            'id, date, home_team_id, away_team_id, home_goals, away_goals, status'
+          )
+          .eq('status', 'FT')
+          .eq('season', selectedSeason)
 
       const { data: statsData, error: statsError } = await supabase
         .from('match_team_stats')
@@ -388,9 +409,9 @@ export default function GeneralStatsView() {
         .select('team_id, league_id, season, bucket, goals_for, goals_against')
         .eq('team_id', AUSTRIA_ID)
         .eq('league_id', LEAGUE_ID)
-        .eq('season', SEASON)
+        .eq('season', selectedSeason)
 
-      const error = teamsError || matchesError || statsError
+      const error = teamsError || matchesError || leagueMatchesError || statsError
 
       if (error) {
         setState({
@@ -398,6 +419,7 @@ export default function GeneralStatsView() {
           error: error.message,
           teams: [],
           matches: [],
+          leagueMatches: [],
           stats: [],
           goalMinutes: [],
         })
@@ -409,6 +431,7 @@ export default function GeneralStatsView() {
         error: null,
         teams: (teamsData ?? []) as Team[],
         matches: (matchesData ?? []) as Match[],
+        leagueMatches: (leagueMatchesData ?? []) as Match[],
         stats: (statsData ?? []) as MatchTeamStats[],
         goalMinutes: ((minuteData ?? []) as GoalMinuteStats[]).sort(
           (a, b) => getMinuteBucketIndex(a.bucket) - getMinuteBucketIndex(b.bucket)
@@ -417,11 +440,13 @@ export default function GeneralStatsView() {
     }
 
     loadData()
-  }, [])
+  }, [selectedSeason])
 
   const summary = useMemo(() => {
     const goals = state.matches.map((match) => getMatchGoals(match))
-    const austriaStats = state.stats.filter((row) => row.team_id === AUSTRIA_ID)
+    const seasonMatchIds = new Set(state.leagueMatches.map((match) => match.id))
+    const seasonStats = state.stats.filter((row) => seasonMatchIds.has(row.match_id))
+    const austriaStats = seasonStats.filter((row) => row.team_id === AUSTRIA_ID)
 
     return {
       ballPossession: average(austriaStats.map((row) => row.ball_possession)),
@@ -430,8 +455,9 @@ export default function GeneralStatsView() {
       passAccuracy: average(austriaStats.map((row) => row.passes_percentage)),
       corners: average(austriaStats.map((row) => row.corner_kicks)),
       goalsPerGame: average(goals),
+      seasonStats,
     }
-  }, [state.matches, state.stats])
+  }, [state.leagueMatches, state.matches, state.stats])
 
   if (state.loading) {
     return <p className="text-slate-400">Statistiken werden geladen...</p>
@@ -449,12 +475,18 @@ export default function GeneralStatsView() {
     <>
       <header className="mb-8 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
+          <div className="mb-2">
+            <SeasonSelector
+              selectedSeason={selectedSeason}
+              setSelectedSeason={setSelectedSeason}
+            />
+          </div>
           <h1 className="text-3xl font-bold tracking-tight">
             Statistik Übersicht
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            Allgemeine Austria-Wien-Kennzahlen ohne Kontextfilter.
+            Allgemeine Austria-Wien-Kennzahlen ohne Kontextfilter fuer die
+            Saison {getSeasonLabel(selectedSeason)}.
           </p>
         </div>
       </header>
@@ -463,27 +495,27 @@ export default function GeneralStatsView() {
         <StatCard
           label="Ballbesitz"
           value={formatNumber(summary.ballPossession, 1, ' %')}
-          rank={getRankLabel(state.teams, state.stats, 'ball_possession')}
+          rank={getRankLabel(state.teams, summary.seasonStats, 'ball_possession')}
         />
         <StatCard
           label="Schuesse pro Spiel"
           value={formatNumber(summary.shots)}
-          rank={getRankLabel(state.teams, state.stats, 'total_shots')}
+          rank={getRankLabel(state.teams, summary.seasonStats, 'total_shots')}
         />
         <StatCard
           label="Schuesse aufs Tor"
           value={formatNumber(summary.shotsOnGoal)}
-          rank={getRankLabel(state.teams, state.stats, 'shots_on_goal')}
+          rank={getRankLabel(state.teams, summary.seasonStats, 'shots_on_goal')}
         />
         <StatCard
           label="Passgenauigkeit"
           value={formatNumber(summary.passAccuracy, 1, ' %')}
-          rank={getRankLabel(state.teams, state.stats, 'passes_percentage')}
+          rank={getRankLabel(state.teams, summary.seasonStats, 'passes_percentage')}
         />
         <StatCard
           label="Ecken pro Spiel"
           value={formatNumber(summary.corners)}
-          rank={getRankLabel(state.teams, state.stats, 'corner_kicks')}
+          rank={getRankLabel(state.teams, summary.seasonStats, 'corner_kicks')}
         />
       </section>
 

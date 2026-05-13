@@ -32,7 +32,7 @@ function getStat(stats: FixtureStatistic[], name: string) {
   return Number(stat.value)
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
@@ -40,10 +40,13 @@ export async function GET() {
     )
   }
 
+  const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
+
   const { data: matches, error: matchError } = await supabase
     .from('matches')
     .select('id, home_team_id, away_team_id, date')
     .eq('status', 'FT')
+    .eq('season', season)
     .or(`home_team_id.eq.${AUSTRIA_ID},away_team_id.eq.${AUSTRIA_ID}`)
     .order('date', { ascending: true })
 

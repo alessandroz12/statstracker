@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import SeasonSelector from '@/components/SeasonSelector'
 import { supabase } from '@/lib/supabase'
+import { getSeasonLabel } from '@/lib/seasons'
 
 const AUSTRIA_ID = 601
 
@@ -12,6 +14,12 @@ type Team = {
   id: number
   name: string
   display_name: string | null
+  rank: number
+  league_group: string | null
+}
+
+type TeamSeason = {
+  team_id: number
   rank: number
   league_group: string | null
 }
@@ -373,7 +381,15 @@ function SummaryBlock({ summary }: { summary: GroupSummary }) {
   )
 }
 
-export default function StatisticsView() {
+type StatisticsViewProps = {
+  selectedSeason: number
+  setSelectedSeason: (season: number) => void
+}
+
+export default function StatisticsView({
+  selectedSeason,
+  setSelectedSeason,
+}: StatisticsViewProps) {
   const [state, setState] = useState<LoadState>({
     loading: true,
     error: null,
@@ -384,7 +400,12 @@ export default function StatisticsView() {
     async function loadData() {
       const { data: teamsData, error: teamsError } = await supabase
         .from('teams')
-        .select('id, name, display_name, rank, league_group')
+        .select('id, name, display_name')
+
+      const { data: teamSeasonsData, error: teamSeasonsError } = await supabase
+        .from('team_seasons')
+        .select('team_id, rank, league_group')
+        .eq('season', selectedSeason)
 
       const { data: matchesData, error: matchesError } = await supabase
         .from('matches')
@@ -392,6 +413,7 @@ export default function StatisticsView() {
           'id, date, home_team_id, away_team_id, home_goals, away_goals, status'
         )
         .eq('status', 'FT')
+        .eq('season', selectedSeason)
         .or(`home_team_id.eq.${AUSTRIA_ID},away_team_id.eq.${AUSTRIA_ID}`)
 
       const { data: statsData, error: statsError } = await supabase
@@ -400,7 +422,7 @@ export default function StatisticsView() {
           'match_id, team_id, ball_possession, total_shots, shots_on_goal, corner_kicks'
         )
 
-      const error = teamsError || matchesError || statsError
+      const error = teamsError || teamSeasonsError || matchesError || statsError
 
       if (error) {
         setState({
@@ -411,19 +433,38 @@ export default function StatisticsView() {
         return
       }
 
+      const teamsById = new Map(
+        ((teamsData ?? []) as Array<
+          Pick<Team, 'id' | 'name' | 'display_name'>
+        >).map((team) => [team.id, team])
+      )
+      const teams = ((teamSeasonsData ?? []) as TeamSeason[])
+        .map((season) => {
+          const team = teamsById.get(season.team_id)
+          if (!team) return null
+
+          return {
+            ...team,
+            id: season.team_id,
+            rank: season.rank,
+            league_group: season.league_group,
+          }
+        })
+        .filter((team): team is Team => Boolean(team))
+
       setState({
         loading: false,
         error: null,
         summaries: buildSummaries(
           (matchesData ?? []) as Match[],
-          (teamsData ?? []) as Team[],
+          teams,
           (statsData ?? []) as MatchTeamStats[]
         ),
       })
     }
 
     loadData()
-  }, [])
+  }, [selectedSeason])
 
   if (state.loading) {
     return <p className="text-slate-400">Statistiken werden geladen...</p>
@@ -440,10 +481,16 @@ export default function StatisticsView() {
   return (
     <>
       <header className="mb-8">
-        <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
+        <div className="mb-2">
+          <SeasonSelector
+            selectedSeason={selectedSeason}
+            setSelectedSeason={setSelectedSeason}
+          />
+        </div>
         <h1 className="text-3xl font-bold tracking-tight">Statistiken</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Austria Wien nach Ligaposition und gegnerischem Ballbesitzprofil.
+          Austria Wien nach Ligaposition und gegnerischem Ballbesitzprofil in
+          der Saison {getSeasonLabel(selectedSeason)}.
         </p>
       </header>
 

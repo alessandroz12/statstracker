@@ -37,7 +37,7 @@ function getStat(stats: FixtureStatistic[], name: string) {
   return Number(stat.value)
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
@@ -45,10 +45,15 @@ export async function GET() {
     )
   }
 
+  const searchParams = new URL(request.url).searchParams
+  const season = Number(searchParams.get('season') ?? 2024)
+  const maxMatches = Math.min(Number(searchParams.get('max') ?? 80), 80)
+
   const { data: matches, error: matchError } = await supabase
     .from('matches')
     .select('id, home_team_id, away_team_id')
     .eq('status', 'FT')
+    .eq('season', season)
     .order('date', { ascending: true })
 
   if (matchError) {
@@ -65,7 +70,7 @@ export async function GET() {
   const matchesToFetch =
     ((matches ?? []) as Match[]).filter(
       (match) => !existingMatchIds.has(match.id)
-    ) ?? []
+    ).slice(0, maxMatches) ?? []
   const rows = []
 
   for (const match of matchesToFetch) {
@@ -144,5 +149,7 @@ export async function GET() {
     success: true,
     fetchedMatches: matchesToFetch.length,
     insertedRows: rows.length,
+    maxMatches,
+    season,
   })
 }

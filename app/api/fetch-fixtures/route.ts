@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase'
 import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
-const SEASON = 2024
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
 type FixtureResponseItem = {
@@ -30,7 +29,7 @@ type FixtureResponseItem = {
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
@@ -38,13 +37,15 @@ export async function GET() {
     )
   }
 
+  const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
+
   const response = await axios.get('https://v3.football.api-sports.io/fixtures', {
     headers: {
       'x-apisports-key': FOOTBALL_API_KEY,
     },
     params: {
       league: LEAGUE_ID,
-      season: SEASON,
+      season,
     },
   })
 
@@ -60,6 +61,8 @@ export async function GET() {
     home_goals: item.goals.home,
     away_goals: item.goals.away,
     status: item.fixture.status.short,
+    league_id: LEAGUE_ID,
+    season,
   }))
 
   const { error } = await supabase.from('matches').upsert(matches)

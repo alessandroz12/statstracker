@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase'
 
 const AUSTRIA_ID = 601
 const LEAGUE_ID = 218
-const SEASON = 2024
 const REQUEST_DELAY_MS = 7000
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
@@ -48,13 +47,15 @@ function toNumber(value: number | null | undefined) {
   return value ?? 0
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
   const players = new Map<number, PlayerStatisticsItem['player']>()
   const statsRows = new Map<number, Record<string, number>>()
@@ -72,7 +73,7 @@ export async function GET() {
           params: {
             team: AUSTRIA_ID,
             league: LEAGUE_ID,
-            season: SEASON,
+            season,
             page,
           },
         }
@@ -88,7 +89,7 @@ export async function GET() {
           player_id: item.player.id,
           team_id: AUSTRIA_ID,
           league_id: LEAGUE_ID,
-          season: SEASON,
+          season,
           appearances: toNumber(seasonStats.games?.appearences),
           goals: toNumber(seasonStats.goals?.total),
           assists: toNumber(seasonStats.goals?.assists),

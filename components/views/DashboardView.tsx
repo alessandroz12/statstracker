@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import SeasonSelector from '@/components/SeasonSelector'
 import { supabase } from '@/lib/supabase'
+import { getSeasonLabel } from '@/lib/seasons'
 import { getDisplayName } from '@/lib/teamNames'
 
 const AUSTRIA_ID = 601
@@ -29,6 +31,16 @@ type Match = {
   home_goals: number
   away_goals: number
   status: string
+}
+
+type TeamSeason = {
+  team_id: number
+  points: number
+  played: number
+  goals_scored: number
+  goals_against: number
+  league_group: string | null
+  rank: number
 }
 
 type TeamRecord = {
@@ -384,7 +396,15 @@ function RecentMatches({ matches, teams }: { matches: Match[]; teams: Team[] }) 
   )
 }
 
-export default function DashboardView() {
+type DashboardViewProps = {
+  selectedSeason: number
+  setSelectedSeason: (season: number) => void
+}
+
+export default function DashboardView({
+  selectedSeason,
+  setSelectedSeason,
+}: DashboardViewProps) {
   const [teams, setTeams] = useState<Team[]>([])
   const [matches, setMatches] = useState<Match[]>([])
   const [allMatches, setAllMatches] = useState<Match[]>([])
@@ -394,9 +414,14 @@ export default function DashboardView() {
     async function loadData() {
       const { data: teamsData } = await supabase
         .from('teams')
+        .select('id, name, display_name, logo_url')
+
+      const { data: teamSeasonsData } = await supabase
+        .from('team_seasons')
         .select(
-          'id, name, display_name, logo_url, rank, points, played, goals_scored, goals_against, league_group'
+          'team_id, points, played, goals_scored, goals_against, league_group, rank'
         )
+        .eq('season', selectedSeason)
 
       const { data: matchesData } = await supabase
         .from('matches')
@@ -404,6 +429,7 @@ export default function DashboardView() {
           'id, date, home_team_id, away_team_id, home_team_name, away_team_name, home_goals, away_goals, status'
         )
         .eq('status', 'FT')
+        .eq('season', selectedSeason)
         .or(`home_team_id.eq.${AUSTRIA_ID},away_team_id.eq.${AUSTRIA_ID}`)
         .order('date', { ascending: false })
         .limit(5)
@@ -414,15 +440,39 @@ export default function DashboardView() {
           'id, date, home_team_id, away_team_id, home_team_name, away_team_name, home_goals, away_goals, status'
         )
         .eq('status', 'FT')
+        .eq('season', selectedSeason)
 
-      setTeams(((teamsData ?? []) as Team[]).sort((a, b) => a.rank - b.rank))
+      const teamsById = new Map(
+        ((teamsData ?? []) as Array<
+          Pick<Team, 'id' | 'name' | 'display_name' | 'logo_url'>
+        >).map((team) => [team.id, team])
+      )
+      const mergedTeams = ((teamSeasonsData ?? []) as TeamSeason[])
+        .map((season) => {
+          const team = teamsById.get(season.team_id)
+          if (!team) return null
+
+          return {
+            ...team,
+            id: season.team_id,
+            points: season.points,
+            played: season.played,
+            goals_scored: season.goals_scored,
+            goals_against: season.goals_against,
+            league_group: season.league_group,
+            rank: season.rank,
+          }
+        })
+        .filter((team): team is Team => Boolean(team))
+
+      setTeams(mergedTeams.sort((a, b) => a.rank - b.rank))
       setMatches((matchesData ?? []) as Match[])
       setAllMatches((allMatchesData ?? []) as Match[])
       setLoading(false)
     }
 
     loadData()
-  }, [])
+  }, [selectedSeason])
 
   if (loading) {
     return <p className="text-slate-400">Dashboard wird geladen...</p>
@@ -464,12 +514,18 @@ export default function DashboardView() {
   return (
     <>
       <header className="mb-8">
-        <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
+        <div className="mb-2">
+          <SeasonSelector
+            selectedSeason={selectedSeason}
+            setSelectedSeason={setSelectedSeason}
+          />
+        </div>
         <h1 className="text-3xl font-bold tracking-tight">
           Austria Wien Dashboard
         </h1>
         <p className="mt-2 text-sm text-slate-400">
-          Überblick über Tabelle, Rohdaten und aktuelle Form.
+          Überblick über Tabelle, Rohdaten und aktuelle Form in der Saison{' '}
+          {getSeasonLabel(selectedSeason)}.
         </p>
       </header>
 

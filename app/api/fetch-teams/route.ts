@@ -3,7 +3,6 @@ import { supabase } from '@/lib/supabase'
 import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
-const SEASON = 2024
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
 type StandingTeamItem = {
@@ -32,6 +31,7 @@ function mapStandingTeam(
     name: item.team.name,
     display_name: getDisplayName(item.team.name),
     logo_url: item.team.logo,
+    team_id: item.team.id,
     points: item.points,
     goals_scored: item.all.goals.for,
     goals_against: item.all.goals.against,
@@ -41,7 +41,7 @@ function mapStandingTeam(
   }
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
@@ -49,13 +49,15 @@ export async function GET() {
     )
   }
 
+  const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
+
   const response = await axios.get('https://v3.football.api-sports.io/standings', {
     headers: {
       'x-apisports-key': FOOTBALL_API_KEY,
     },
     params: {
       league: LEAGUE_ID,
-      season: SEASON,
+      season,
     },
   })
 
@@ -80,13 +82,47 @@ export async function GET() {
   )
 
   const teams = [...championshipTeams, ...relegationTeams]
+  const teamRows = teams.map((team) => ({
+    id: team.id,
+    name: team.name,
+    display_name: team.display_name,
+    logo_url: team.logo_url,
+    points: team.points,
+    goals_scored: team.goals_scored,
+    goals_against: team.goals_against,
+    league_group: team.league_group,
+    played: team.played,
+    rank: team.rank,
+  }))
+  const teamSeasonRows = teams.map((team) => ({
+    team_id: team.id,
+    league_id: LEAGUE_ID,
+    season,
+    points: team.points,
+    goals_scored: team.goals_scored,
+    goals_against: team.goals_against,
+    league_group: team.league_group,
+    played: team.played,
+    rank: team.rank,
+  }))
 
-  const { error } = await supabase.from('teams').upsert(teams)
+  const { error: teamsError } = await supabase.from('teams').upsert(teamRows)
 
-  if (error) {
+  if (teamsError) {
     return Response.json({
       success: false,
-      error,
+      error: teamsError,
+    })
+  }
+
+  const { error: seasonsError } = await supabase
+    .from('team_seasons')
+    .upsert(teamSeasonRows, { onConflict: 'team_id,league_id,season' })
+
+  if (seasonsError) {
+    return Response.json({
+      success: false,
+      error: seasonsError,
     })
   }
 
@@ -95,6 +131,7 @@ export async function GET() {
     championshipCount: championshipTeams.length,
     relegationCount: relegationTeams.length,
     total: teams.length,
+    season,
     teams,
   })
 }

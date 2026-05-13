@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import SeasonSelector from '@/components/SeasonSelector'
 import { supabase } from '@/lib/supabase'
+import { getSeasonLabel } from '@/lib/seasons'
 
 const AUSTRIA_ID = 601
 const LEAGUE_ID = 218
-const SEASON = 2024
 
 type Player = {
   id: number
@@ -34,7 +35,15 @@ function StatCell({ value }: { value: number }) {
   return <td className="px-5 py-4 text-right tabular-nums">{value}</td>
 }
 
-export default function PlayersView() {
+type PlayersViewProps = {
+  selectedSeason: number
+  setSelectedSeason: (season: number) => void
+}
+
+export default function PlayersView({
+  selectedSeason,
+  setSelectedSeason,
+}: PlayersViewProps) {
   const [state, setState] = useState<LoadState>({
     loading: true,
     error: null,
@@ -52,7 +61,7 @@ export default function PlayersView() {
         .select('player_id, appearances, goals, assists, yellow_cards, red_cards')
         .eq('team_id', AUSTRIA_ID)
         .eq('league_id', LEAGUE_ID)
-        .eq('season', SEASON)
+        .eq('season', selectedSeason)
 
       const error = playersError || statsError
 
@@ -91,7 +100,7 @@ export default function PlayersView() {
     }
 
     loadData()
-  }, [])
+  }, [selectedSeason])
 
   const totals = useMemo(
     () =>
@@ -129,10 +138,16 @@ export default function PlayersView() {
   return (
     <>
       <header className="mb-8">
-        <p className="mb-2 text-sm text-violet-300">Saison 2024/25</p>
+        <div className="mb-2">
+          <SeasonSelector
+            selectedSeason={selectedSeason}
+            setSelectedSeason={setSelectedSeason}
+          />
+        </div>
         <h1 className="text-3xl font-bold tracking-tight">Spieler</h1>
         <p className="mt-2 text-sm text-slate-400">
-          Kaderstatistiken fuer Austria Wien.
+          Kaderstatistiken fuer Austria Wien in der Saison{' '}
+          {getSeasonLabel(selectedSeason)}.
         </p>
       </header>
 
