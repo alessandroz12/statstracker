@@ -87,12 +87,6 @@ export async function GET(request: Request) {
     name: team.name,
     display_name: team.display_name,
     logo_url: team.logo_url,
-    points: team.points,
-    goals_scored: team.goals_scored,
-    goals_against: team.goals_against,
-    league_group: team.league_group,
-    played: team.played,
-    rank: team.rank,
   }))
   const teamSeasonRows = teams.map((team) => ({
     team_id: team.id,

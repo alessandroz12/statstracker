@@ -6,7 +6,7 @@ const REQUEST_DELAY_MS = 7000
 const FOOTBALL_API_KEY = process.env.FOOTBALL_API_KEY
 
 type Team = {
-  id: number
+  team_id: number
 }
 
 type MinuteStats = Record<
@@ -45,8 +45,10 @@ export async function GET(request: Request) {
   const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
   const { data: teams, error: teamsError } = await supabase
-    .from('teams')
-    .select('id')
+    .from('team_seasons')
+    .select('team_id')
+    .eq('league_id', LEAGUE_ID)
+    .eq('season', season)
     .order('rank', { ascending: true })
 
   if (teamsError) {
@@ -66,7 +68,7 @@ export async function GET(request: Request) {
           params: {
             league: LEAGUE_ID,
             season,
-            team: team.id,
+            team: team.team_id,
           },
         }
       )
@@ -80,7 +82,7 @@ export async function GET(request: Request) {
 
       for (const bucket of buckets) {
         rows.push({
-          team_id: team.id,
+          team_id: team.team_id,
           league_id: LEAGUE_ID,
           season,
           bucket,
@@ -97,7 +99,7 @@ export async function GET(request: Request) {
         {
           success: false,
           message: 'Fehler beim Tor-Minuten-Fetch',
-          teamId: team.id,
+          teamId: team.team_id,
           status: apiError.response?.status,
           apiError: apiError.response?.data,
         },
