@@ -82,10 +82,14 @@ function getMinuteBucketIndex(bucket: string) {
     '61-75',
     '76-90',
     '91-105',
-    '106-120',
   ]
 
-  return order.indexOf(bucket)
+  const index = order.indexOf(bucket)
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index
+}
+
+function getMinuteBucketLabel(bucket: string) {
+  return bucket === '91-105' ? '90+' : bucket
 }
 
 function getMatchGoals(match: Match) {
@@ -313,42 +317,51 @@ function MinuteBarPanel({
   title: string
   values: GoalMinuteStats[]
 }) {
+  const valueKey = title.includes('Erzielte') ? 'goals_for' : 'goals_against'
+  const chartValues = values
+    .filter((item) => item.bucket !== '106-120')
+    .map((item) => ({
+      bucket: item.bucket,
+      label: getMinuteBucketLabel(item.bucket),
+      value: item[valueKey],
+    }))
+
   const maxValue = Math.max(
     1,
-    ...values.map((item) =>
-      title.includes('Erzielte') ? item.goals_for : item.goals_against
-    )
+    ...chartValues.map((item) => item.value)
   )
 
   return (
     <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
       <h2 className="font-semibold">{title}</h2>
-      <div className="mt-5 flex h-40 items-end gap-4">
-        {values.map((item) => (
-          <div key={item.bucket} className="flex flex-1 flex-col items-center">
-            <span className="mb-2 text-xs font-semibold text-slate-200">
-              {title.includes('Erzielte')
-                ? item.goals_for
-                : item.goals_against}
-            </span>
+      <div className="mt-5 grid h-48 grid-cols-7 items-end gap-3">
+        {chartValues.map((item) => {
+          const height =
+            item.value === 0
+              ? 3
+              : Math.max((item.value / maxValue) * 100, 12)
+
+          return (
             <div
-              className="w-full rounded-t-lg bg-violet-500"
-              style={{
-                height: `${Math.max(
-                  (((title.includes('Erzielte')
-                    ? item.goals_for
-                    : item.goals_against) || 0) /
-                    maxValue) *
-                    100,
-                  8
-                )}%`,
-              }}
-            />
-            <span className="mt-2 text-center text-[10px] text-slate-500">
-              {item.bucket}
-            </span>
-          </div>
-        ))}
+              key={item.bucket}
+              className="flex h-full min-w-0 flex-col items-center justify-end"
+            >
+              <span className="mb-2 text-xs font-semibold text-slate-200">
+                {item.value}
+              </span>
+              <div className="flex h-32 w-full items-end rounded-t-md bg-white/[0.04]">
+                <div
+                  className="w-full rounded-t-md bg-violet-500 shadow-lg shadow-violet-950/30"
+                  style={{ height: `${height}%` }}
+                  aria-label={`${item.label}: ${item.value}`}
+                />
+              </div>
+              <span className="mt-2 text-center text-[10px] text-slate-500">
+                {item.label}
+              </span>
+            </div>
+          )
+        })}
       </div>
     </section>
   )
@@ -433,9 +446,12 @@ export default function GeneralStatsView({
         matches: (matchesData ?? []) as Match[],
         leagueMatches: (leagueMatchesData ?? []) as Match[],
         stats: (statsData ?? []) as MatchTeamStats[],
-        goalMinutes: ((minuteData ?? []) as GoalMinuteStats[]).sort(
-          (a, b) => getMinuteBucketIndex(a.bucket) - getMinuteBucketIndex(b.bucket)
-        ),
+        goalMinutes: ((minuteData ?? []) as GoalMinuteStats[])
+          .filter((item) => item.bucket !== '106-120')
+          .sort(
+            (a, b) =>
+              getMinuteBucketIndex(a.bucket) - getMinuteBucketIndex(b.bucket)
+          ),
       })
     }
 
