@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
-import { supabase } from '@/lib/supabase'
+import { requireFetchSecret } from '@/lib/adminAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 const REQUEST_DELAY_MS = 7000
 const DEFAULT_MAX_MATCHES = 35
@@ -40,12 +41,17 @@ function getStat(stats: FixtureStatistic[], name: string) {
 }
 
 export async function GET(request: Request) {
+  const authError = requireFetchSecret(request)
+  if (authError) return authError
+
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const supabaseAdmin = getSupabaseAdmin()
 
   const searchParams = new URL(request.url).searchParams
   const season = Number(searchParams.get('season') ?? 2024)
@@ -54,7 +60,7 @@ export async function GET(request: Request) {
     HARD_MAX_MATCHES
   )
 
-  const { data: matches, error: matchError } = await supabase
+  const { data: matches, error: matchError } = await supabaseAdmin
     .from('matches')
     .select('id, home_team_id, away_team_id')
     .eq('status', 'FT')
@@ -65,7 +71,7 @@ export async function GET(request: Request) {
     return Response.json({ success: false, error: matchError }, { status: 500 })
   }
 
-  const { data: existingStats } = await supabase
+  const { data: existingStats } = await supabaseAdmin
     .from('match_team_stats')
     .select('match_id')
 
@@ -121,7 +127,7 @@ export async function GET(request: Request) {
         })
       }
 
-      const { error } = await supabase
+      const { error } = await supabaseAdmin
         .from('match_team_stats')
         .upsert(rows, { onConflict: 'match_id,team_id' })
 

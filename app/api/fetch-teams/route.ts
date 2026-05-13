@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { supabase } from '@/lib/supabase'
+import { requireFetchSecret } from '@/lib/adminAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
@@ -42,12 +43,17 @@ function mapStandingTeam(
 }
 
 export async function GET(request: Request) {
+  const authError = requireFetchSecret(request)
+  if (authError) return authError
+
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const supabaseAdmin = getSupabaseAdmin()
 
   const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
@@ -100,7 +106,7 @@ export async function GET(request: Request) {
     rank: team.rank,
   }))
 
-  const { error: teamsError } = await supabase.from('teams').upsert(teamRows)
+  const { error: teamsError } = await supabaseAdmin.from('teams').upsert(teamRows)
 
   if (teamsError) {
     return Response.json({
@@ -109,7 +115,7 @@ export async function GET(request: Request) {
     })
   }
 
-  const { error: seasonsError } = await supabase
+  const { error: seasonsError } = await supabaseAdmin
     .from('team_seasons')
     .upsert(teamSeasonRows, { onConflict: 'team_id,league_id,season' })
 

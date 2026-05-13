@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
-import { supabase } from '@/lib/supabase'
+import { requireFetchSecret } from '@/lib/adminAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 const LEAGUE_ID = 218
 const REQUEST_DELAY_MS = 7000
@@ -35,6 +36,9 @@ function sleep(ms: number) {
 }
 
 export async function GET(request: Request) {
+  const authError = requireFetchSecret(request)
+  if (authError) return authError
+
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
@@ -42,9 +46,11 @@ export async function GET(request: Request) {
     )
   }
 
+  const supabaseAdmin = getSupabaseAdmin()
+
   const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
-  const { data: teams, error: teamsError } = await supabase
+  const { data: teams, error: teamsError } = await supabaseAdmin
     .from('team_seasons')
     .select('team_id')
     .eq('league_id', LEAGUE_ID)
@@ -108,7 +114,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('team_goal_minute_stats')
     .upsert(rows, { onConflict: 'team_id,league_id,season,bucket' })
 

@@ -1,5 +1,6 @@
 import axios from 'axios'
-import { supabase } from '@/lib/supabase'
+import { requireFetchSecret } from '@/lib/adminAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 import { getDisplayName } from '@/lib/teamNames'
 
 const LEAGUE_ID = 218
@@ -30,12 +31,17 @@ type FixtureResponseItem = {
 }
 
 export async function GET(request: Request) {
+  const authError = requireFetchSecret(request)
+  if (authError) return authError
+
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const supabaseAdmin = getSupabaseAdmin()
 
   const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
@@ -65,7 +71,7 @@ export async function GET(request: Request) {
     season,
   }))
 
-  const { error } = await supabase.from('matches').upsert(matches)
+  const { error } = await supabaseAdmin.from('matches').upsert(matches)
 
   if (error) {
     return Response.json({ success: false, error })

@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios'
-import { supabase } from '@/lib/supabase'
+import { requireFetchSecret } from '@/lib/adminAuth'
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin'
 
 const AUSTRIA_ID = 601
 const LEAGUE_ID = 218
@@ -48,12 +49,17 @@ function toNumber(value: number | null | undefined) {
 }
 
 export async function GET(request: Request) {
+  const authError = requireFetchSecret(request)
+  if (authError) return authError
+
   if (!FOOTBALL_API_KEY) {
     return Response.json(
       { success: false, error: 'FOOTBALL_API_KEY fehlt' },
       { status: 500 }
     )
   }
+
+  const supabaseAdmin = getSupabaseAdmin()
 
   const season = Number(new URL(request.url).searchParams.get('season') ?? 2024)
 
@@ -129,7 +135,7 @@ export async function GET(request: Request) {
     photo_url: player.photo,
   }))
 
-  const { error: playersError } = await supabase
+  const { error: playersError } = await supabaseAdmin
     .from('players')
     .upsert(playerRows)
 
@@ -140,7 +146,7 @@ export async function GET(request: Request) {
     )
   }
 
-  const { error: statsError } = await supabase
+  const { error: statsError } = await supabaseAdmin
     .from('player_season_stats')
     .upsert(Array.from(statsRows.values()), {
       onConflict: 'player_id,team_id,league_id,season',
