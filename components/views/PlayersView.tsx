@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import SeasonSelector from '@/components/SeasonSelector'
 import { supabase } from '@/lib/supabase'
 import { getSeasonLabel } from '@/lib/seasons'
@@ -90,7 +90,14 @@ export default function PlayersView({
           }
         })
         .filter((row): row is PlayerRow => Boolean(row))
-        .sort((a, b) => b.appearances - a.appearances || b.goals - a.goals)
+        .filter((row) => row.appearances >= 1)
+        .sort(
+          (a, b) =>
+            b.goals - a.goals ||
+            b.assists - a.assists ||
+            b.appearances - a.appearances ||
+            a.name.localeCompare(b.name)
+        )
 
       setState({
         loading: false,
@@ -101,27 +108,6 @@ export default function PlayersView({
 
     loadData()
   }, [selectedSeason])
-
-  const totals = useMemo(
-    () =>
-      state.players.reduce(
-        (sum, player) => ({
-          appearances: sum.appearances + player.appearances,
-          goals: sum.goals + player.goals,
-          assists: sum.assists + player.assists,
-          yellowCards: sum.yellowCards + player.yellow_cards,
-          redCards: sum.redCards + player.red_cards,
-        }),
-        {
-          appearances: 0,
-          goals: 0,
-          assists: 0,
-          yellowCards: 0,
-          redCards: 0,
-        }
-      ),
-    [state.players]
-  )
 
   if (state.loading) {
     return <p className="text-slate-400">Spieler werden geladen...</p>
@@ -151,36 +137,11 @@ export default function PlayersView({
         </p>
       </header>
 
-      <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <p className="text-xs uppercase text-slate-400">Spieler</p>
-          <p className="mt-3 text-3xl font-bold">{state.players.length}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <p className="text-xs uppercase text-slate-400">Einsaetze</p>
-          <p className="mt-3 text-3xl font-bold">{totals.appearances}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <p className="text-xs uppercase text-slate-400">Tore</p>
-          <p className="mt-3 text-3xl font-bold">{totals.goals}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <p className="text-xs uppercase text-slate-400">Assists</p>
-          <p className="mt-3 text-3xl font-bold">{totals.assists}</p>
-        </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
-          <p className="text-xs uppercase text-slate-400">Karten</p>
-          <p className="mt-3 text-3xl font-bold">
-            {totals.yellowCards}/{totals.redCards}
-          </p>
-        </div>
-      </section>
-
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] shadow-xl shadow-black/20">
         <div className="border-b border-white/10 p-5">
           <h2 className="font-semibold">Kader</h2>
           <p className="mt-1 text-xs text-slate-400">
-            Sortiert nach Einsaetzen.
+            Spieler mit mindestens einem Einsatz, sortiert nach Toren.
           </p>
         </div>
 
