@@ -45,6 +45,20 @@ type GoalMinuteStats = {
   goals_against: number
 }
 
+type HomeAwaySummary = {
+  key: 'home' | 'away'
+  title: string
+  games: number
+  wins: number
+  draws: number
+  losses: number
+  pointsPerGame: number | null
+}
+
+type HomeAwayGroup = Pick<HomeAwaySummary, 'key' | 'title'> & {
+  matches: Match[]
+}
+
 type LoadState = {
   loading: boolean
   error: string | null
@@ -71,6 +85,15 @@ function formatNumber(value: number | null, digits = 1, suffix = '') {
   return `${value.toLocaleString('de-AT', {
     maximumFractionDigits: digits,
   })}${suffix}`
+}
+
+function formatPoints(value: number | null) {
+  if (value === null) return '-'
+
+  return value.toLocaleString('de-AT', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })
 }
 
 function getMinuteBucketIndex(bucket: string) {
@@ -104,6 +127,46 @@ function getResult(match: Match) {
   if (austriaGoals > opponentGoals) return 'wins'
   if (austriaGoals < opponentGoals) return 'losses'
   return 'draws'
+}
+
+function getResultPoints(result: 'wins' | 'draws' | 'losses') {
+  if (result === 'wins') return 3
+  if (result === 'draws') return 1
+  return 0
+}
+
+function buildHomeAwaySummaries(matches: Match[]): HomeAwaySummary[] {
+  const groups: HomeAwayGroup[] = [
+    {
+      key: 'home',
+      title: 'Heim',
+      matches: matches.filter((match) => match.home_team_id === AUSTRIA_ID),
+    },
+    {
+      key: 'away',
+      title: 'Auswaerts',
+      matches: matches.filter((match) => match.away_team_id === AUSTRIA_ID),
+    },
+  ]
+
+  return groups.map((group) => {
+    const results = group.matches.map((match) => getResult(match))
+    const points = results.reduce(
+      (sum, result) => sum + getResultPoints(result),
+      0
+    )
+
+    return {
+      key: group.key,
+      title: group.title,
+      games: group.matches.length,
+      wins: results.filter((result) => result === 'wins').length,
+      draws: results.filter((result) => result === 'draws').length,
+      losses: results.filter((result) => result === 'losses').length,
+      pointsPerGame:
+        group.matches.length > 0 ? points / group.matches.length : null,
+    }
+  })
 }
 
 function StatCard({
@@ -367,6 +430,58 @@ function MinuteBarPanel({
   )
 }
 
+function HomeAwayChart({ matches }: { matches: Match[] }) {
+  const summaries = buildHomeAwaySummaries(matches)
+
+  return (
+    <section className="rounded-xl border border-white/10 bg-white/[0.03] p-5 shadow-xl shadow-black/20">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Heim vs. Auswaerts</h2>
+          <p className="mt-1 text-xs text-slate-400">
+            Punkteschnitt nach Spielort.
+          </p>
+        </div>
+        <span className="rounded-full border border-violet-400/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-200">
+          max. 3,00
+        </span>
+      </div>
+
+      <div className="space-y-5">
+        {summaries.map((summary) => {
+          const value = summary.pointsPerGame ?? 0
+          const width = `${Math.min((value / 3) * 100, 100)}%`
+
+          return (
+            <div key={summary.key}>
+              <div className="mb-2 flex items-center justify-between gap-4 text-sm">
+                <span className="text-slate-300">{summary.title}</span>
+                <span className="font-semibold text-violet-200">
+                  {formatPoints(summary.pointsPerGame)}
+                </span>
+              </div>
+
+              <div className="h-3 overflow-hidden rounded-full bg-[#0B1020]">
+                <div
+                  className="h-full rounded-full bg-violet-400"
+                  style={{ width }}
+                />
+              </div>
+
+              <div className="mt-2 flex items-center justify-between text-xs text-slate-500">
+                <span>{summary.games} Spiele</span>
+                <span className="font-medium text-slate-300">
+                  W/X/L {summary.wins}/{summary.draws}/{summary.losses}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </section>
+  )
+}
+
 type GeneralStatsViewProps = {
   selectedSeason: number
   setSelectedSeason: (season: number) => void
@@ -540,6 +655,7 @@ export default function GeneralStatsView({
         <ResultsChart matches={state.matches} />
         <MinuteBarPanel title="Erzielte Tore nach Minuten" values={state.goalMinutes} />
         <MinuteBarPanel title="Bekommene Tore nach Minuten" values={state.goalMinutes} />
+        <HomeAwayChart matches={state.matches} />
       </div>
     </>
   )
